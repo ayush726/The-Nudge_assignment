@@ -1,188 +1,230 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTicketStore } from '../store/ticketStore';
 import { aiService } from '../services/aiService';
 import type { TicketCategory, TicketUrgency, Ticket } from '../types/ticket';
-import { X, Sparkles, Loader2, CheckCircle2 } from 'lucide-react';
+import { X, Sparkles, Loader2, CheckCircle2, AlertTriangle } from 'lucide-react';
+import { CategoryTag, StatusBadge } from './JiraComponents';
 
-interface Props {
-  onClose: () => void;
-}
+interface Props { onClose: () => void; }
 
-const CreateTicketModal: React.FC<Props> = ({ onClose }) => {
+const URGENCY_LEVELS: TicketUrgency[] = ['Low', 'Medium', 'High', 'Critical'];
+const CATEGORIES: TicketCategory[] = ['IT', 'HR', 'Finance', 'Admin', 'Other'];
+
+const URGENCY_COLOR: Record<TicketUrgency, string> = {
+  Low:      '#579DFF',
+  Medium:   '#F6BD29',
+  High:     '#E97F33',
+  Critical: '#E5493A',
+};
+
+export default function CreateTicketModal({ onClose }: Props) {
   const { addTicket, tickets } = useTicketStore();
-  const [title, setTitle] = useState('');
+  const [title, setTitle]           = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<TicketCategory>('Other');
-  const [urgency, setUrgency] = useState<TicketUrgency>('Low');
-  
+  const [category, setCategory]     = useState<TicketCategory>('Other');
+  const [urgency, setUrgency]       = useState<TicketUrgency>('Medium');
   const [isAiLoading, setIsAiLoading] = useState(false);
   const [similarTickets, setSimilarTickets] = useState<Ticket[]>([]);
-  const [aiAutoCategorized, setAiAutoCategorized] = useState(false);
-  const [aiError, setAiError] = useState(false);
+  const [aiAutoCat, setAiAutoCat]   = useState(false);
+  const [aiError, setAiError]       = useState(false);
+  const [titleError, setTitleError] = useState('');
+  const [descError, setDescError]   = useState('');
 
-  const descTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    if (description.length > 10) {
-      if (descTimeout.current) clearTimeout(descTimeout.current);
-      
-      descTimeout.current = setTimeout(async () => {
+    if (description.trim().length > 10) {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(async () => {
         setIsAiLoading(true);
         setAiError(false);
         try {
-          const cat = await aiService.categorizeTicket(description.trim());
+          const [cat, similar] = await Promise.all([
+            aiService.categorizeTicket(description.trim()),
+            aiService.findSimilarTickets(description.trim(), tickets),
+          ]);
           setCategory(cat);
-          setAiAutoCategorized(true);
-
-          const similar = await aiService.findSimilarTickets(description.trim(), tickets);
+          setAiAutoCat(true);
           setSimilarTickets(similar);
-        } catch (error) {
-          console.error("AI Service degraded:", error);
+        } catch {
           setAiError(true);
-          // Degrade gracefully: don't block
         } finally {
           setIsAiLoading(false);
         }
       }, 800);
     } else {
       setSimilarTickets([]);
-      setAiAutoCategorized(false);
+      setAiAutoCat(false);
       setAiError(false);
     }
-  }, [description, tickets]);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [description]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedTitle = title.trim();
-    const trimmedDesc = description.trim();
-    if (!trimmedTitle || !trimmedDesc) return;
+    let valid = true;
+    const t = title.trim(), d = description.trim();
+    if (!t) { setTitleError('Summary is required.'); valid = false; }
+    else if (t.length > 150) { setTitleError('Max 150 characters.'); valid = false; }
+    else setTitleError('');
+    if (!d) { setDescError('Description is required.'); valid = false; }
+    else setDescError('');
+    if (!valid) return;
 
-    addTicket({
-      title: trimmedTitle.substring(0, 150),
-      description: trimmedDesc.substring(0, 3000),
-      category,
-      urgency,
-      status: 'Open',
-      createdBy: 'Alice Employee',
-    });
+    addTicket({ title: t.substring(0, 150), description: d.substring(0, 3000), category, urgency, status: 'Open', createdBy: 'Alice Employee' });
     onClose();
   };
 
   return createPortal(
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}>
-      <div className="glass-panel animate-fade-in" style={{ width: '100%', maxWidth: '600px', padding: '2rem', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div className="flex justify-between items-center mb-6">
-          <h2 className="text-xl">Raise a Support Ticket</h2>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}>
-            <X size={24} />
-          </button>
+    <div className="modal-overlay" onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="modal-panel animate-in" style={{ maxWidth: 580 }}>
+        {/* Header */}
+        <div className="modal-header">
+          <div>
+            <h2 style={{ fontSize: 16 }}>Create Issue</h2>
+            <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>NudgeSupport / Internal Ticket Platform</p>
+          </div>
+          <button className="btn-icon" onClick={onClose}><X size={18} /></button>
         </div>
 
-        <form onSubmit={handleSubmit} className="grid gap-4">
-          <div>
-            <label className="text-secondary" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Title</label>
-            <input 
-              required
-              maxLength={150}
-              type="text" 
-              className="input-field" 
-              placeholder="Brief summary of the issue"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
-          </div>
+        <div className="modal-body">
+          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
 
-          <div>
-            <label className="text-secondary" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Description</label>
-            <textarea 
-              required
-              maxLength={3000}
-              className="input-field" 
-              rows={4}
-              placeholder="Please describe the issue in detail. Our AI will automatically categorize it."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-
-          {/* AI Features Area */}
-          <div style={{ minHeight: '80px', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-            {isAiLoading && (
-              <div className="flex items-center gap-2 text-accent-primary" style={{ fontSize: '0.85rem' }}>
-                <Loader2 size={16} className="animate-spin" style={{ animation: 'spin 1s linear infinite' }} />
-                AI is analyzing your request...
+            {/* Issue Type row */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
+              <div>
+                <label className="field-label">Issue Type</label>
+                <select className="input-field" defaultValue="Support Request" disabled>
+                  <option>Support Request</option>
+                </select>
               </div>
-            )}
-            
-            {!isAiLoading && aiError && (
-              <div className="flex items-center gap-2" style={{ color: '#ef4444', fontSize: '0.85rem' }}>
-                AI assistance is currently unavailable. Please categorize manually.
-              </div>
-            )}
-
-            {!isAiLoading && !aiError && similarTickets.length > 0 && (
-              <div style={{ background: 'rgba(99, 102, 241, 0.1)', padding: '1rem', borderRadius: 'var(--radius-md)', border: '1px solid rgba(99, 102, 241, 0.2)' }}>
-                <div className="flex items-center gap-2 mb-2 text-accent-primary" style={{ fontSize: '0.9rem', fontWeight: 600 }}>
-                  <Sparkles size={16} />
-                  Similar resolved tickets found. Does this solve your issue?
-                </div>
-                <div className="grid gap-2">
-                  {similarTickets.map(st => (
-                    <div key={st.id} className="flex gap-2 items-start" style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                      <CheckCircle2 size={14} style={{ marginTop: '2px', color: 'var(--status-resolved-text)' }} />
-                      <div>
-                        <strong>{st.title}</strong>
-                        <div style={{ opacity: 0.8 }}>{st.agentNotes || 'Resolved without notes'}</div>
-                      </div>
-                    </div>
+              <div>
+                <label className="field-label">Priority</label>
+                <select
+                  className="input-field"
+                  value={urgency}
+                  onChange={e => setUrgency(e.target.value as TicketUrgency)}
+                  style={{ color: URGENCY_COLOR[urgency] }}
+                >
+                  {URGENCY_LEVELS.map(u => (
+                    <option key={u} value={u} style={{ color: URGENCY_COLOR[u] }}>{u}</option>
                   ))}
-                </div>
+                </select>
               </div>
-            )}
-          </div>
+            </div>
 
-          <div className="flex gap-4">
-            <div style={{ flex: 1 }}>
-              <label className="text-secondary" style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem', fontSize: '0.9rem' }}>
-                Category
-                {aiAutoCategorized && <span className="text-accent-primary flex items-center gap-1" style={{ fontSize: '0.75rem' }}><Sparkles size={12}/> AI Selected</span>}
+            {/* Summary */}
+            <div>
+              <label className="field-label">Summary *</label>
+              <input
+                type="text"
+                className="input-field"
+                maxLength={150}
+                placeholder="Brief description of the issue…"
+                value={title}
+                onChange={e => { setTitle(e.target.value); setTitleError(''); }}
+              />
+              {titleError && <p style={{ marginTop: 4, fontSize: 12, color: 'var(--priority-critical)' }}>{titleError}</p>}
+              <p style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4, textAlign: 'right' }}>{title.length}/150</p>
+            </div>
+
+            {/* Description */}
+            <div>
+              <label className="field-label">Description *</label>
+              <textarea
+                className="input-field"
+                maxLength={3000}
+                rows={4}
+                placeholder="Describe the issue in detail. Our AI will auto-detect the department…"
+                value={description}
+                onChange={e => { setDescription(e.target.value); setDescError(''); }}
+              />
+              {descError && <p style={{ marginTop: 4, fontSize: 12, color: 'var(--priority-critical)' }}>{descError}</p>}
+            </div>
+
+            {/* AI Panel */}
+            <div style={{ minHeight: 60 }}>
+              {isAiLoading && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--text-link)' }}>
+                  <Loader2 size={14} className="spin" /> AI is analysing…
+                </div>
+              )}
+              {!isAiLoading && aiError && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--priority-critical)' }}>
+                  <AlertTriangle size={14} /> AI unavailable — please select the category manually.
+                </div>
+              )}
+              {!isAiLoading && !aiError && similarTickets.length > 0 && (
+                <div className="ai-panel">
+                  <div className="ai-panel-header">
+                    <Sparkles size={14} /> Similar issues found — does any of these solve your problem?
+                  </div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {similarTickets.map(st => (
+                      <div key={st.id} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, fontSize: 13 }}>
+                        <CheckCircle2 size={14} style={{ marginTop: 2, color: 'var(--status-resolved-text)', flexShrink: 0 }} />
+                        <div>
+                          <div style={{ fontWeight: 500, color: 'var(--text-heading)' }}>
+                            <span style={{ fontFamily: 'monospace', fontSize: 11, color: 'var(--text-link)', marginRight: 6 }}>{st.id}</span>
+                            {st.title}
+                          </div>
+                          {st.agentNotes && <div style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 2 }}>{st.agentNotes}</div>}
+                          <StatusBadge status={st.status} />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Category row */}
+            <div>
+              <label className="field-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                Department
+                {aiAutoCat && (
+                  <span style={{ fontSize: 11, color: 'var(--text-link)', display: 'flex', alignItems: 'center', gap: 3, fontWeight: 500 }}>
+                    <Sparkles size={10} /> AI selected
+                  </span>
+                )}
               </label>
-              <select className="input-field" value={category} onChange={(e) => { setCategory(e.target.value as TicketCategory); setAiAutoCategorized(false); }}>
-                <option value="IT">IT Support</option>
-                <option value="HR">Human Resources</option>
-                <option value="Finance">Finance</option>
-                <option value="Admin">Administration</option>
-                <option value="Other">Other</option>
-              </select>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {CATEGORIES.map(cat => (
+                  <button
+                    key={cat}
+                    type="button"
+                    onClick={() => { setCategory(cat); setAiAutoCat(false); }}
+                    style={{
+                      padding: '5px 12px',
+                      border: `1px solid ${category === cat ? 'var(--border-focus)' : 'var(--border)'}`,
+                      borderRadius: 'var(--radius-md)',
+                      background: category === cat ? 'rgba(87,157,255,0.12)' : 'var(--bg-input)',
+                      cursor: 'pointer',
+                      fontFamily: 'inherit',
+                    }}
+                  >
+                    <CategoryTag cat={cat} />
+                  </button>
+                ))}
+              </div>
             </div>
-            
-            <div style={{ flex: 1 }}>
-              <label className="text-secondary" style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.9rem' }}>Urgency</label>
-              <select className="input-field" value={urgency} onChange={(e) => setUrgency(e.target.value as TicketUrgency)}>
-                <option value="Low">Low</option>
-                <option value="Medium">Medium</option>
-                <option value="High">High</option>
-                <option value="Critical">Critical</option>
-              </select>
-            </div>
-          </div>
 
-          <div className="flex justify-end gap-4 mt-4">
-            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={!title.trim() || !description.trim() || isAiLoading}>Submit Ticket</button>
-          </div>
-        </form>
+            {/* Submit */}
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 4, borderTop: '1px solid var(--border)' }}>
+              <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+              <button
+                type="submit"
+                className="btn btn-primary"
+                disabled={!title.trim() || !description.trim() || isAiLoading}
+              >
+                Create Issue
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
-      <style>{`
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
     </div>,
     document.body
   );
-};
-
-export default CreateTicketModal;
+}

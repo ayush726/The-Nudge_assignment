@@ -1,73 +1,109 @@
-# React + TypeScript + Vite
+# NudgeSupport — Internal Ticket Platform
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A Jira-inspired internal support ticketing tool built for employees to raise and track IT, HR, Finance, and Admin requests — with an AI layer for smart categorization and agent assistance.
 
-Currently, two official plugins are available:
+---
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## ✨ Features
 
-## React Compiler
+### Employee Portal
+- Raise support tickets with title, description, department, and priority
+- View personal ticket history with live status updates
+- Receive in-app notifications when tickets are updated
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+### Agent Board
+- **Kanban Board** — drag-feel columns for Open → In Progress → Resolved → Closed
+- **List View** — sortable, searchable table with filters by category and priority
+- Assign tickets to team members
+- Add internal notes and public comments
+- Enforce valid status transitions (no illegal jumps)
 
-## Expanding the ESLint configuration
+### AI Layer
+- **Auto-categorization** — AI detects the department (IT, HR, Finance, Admin) from the description
+- **Duplicate detection** — surfaces similar resolved tickets before submission
+- **AI-drafted first response** — agents get a suggested reply when opening a ticket
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### Reports & Analytics
+- KPI cards: total, open, in-progress, resolved, resolution rate
+- 7-day ticket volume trend (line chart)
+- Issues by department (bar chart)
+- Status distribution (pie chart)
+- Issues by priority (horizontal bar chart)
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+---
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+## 🛠 Tech Stack
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Layer | Technology |
+|---|---|
+| Framework | React 18 + TypeScript (Vite) |
+| State | Zustand with `localStorage` persistence |
+| Routing | React Router v6 |
+| Charts | Recharts |
+| Icons | Lucide React |
+| Styling | Vanilla CSS (Jira-inspired dark design system) |
+
+---
+
+## 🚀 Getting Started
+
+```bash
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Build for production
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Open `http://localhost:5173` in your browser.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+---
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+## 📁 Project Structure
+
 ```
+src/
+├── components/
+│   ├── CreateTicketModal.tsx   # New ticket form with AI
+│   ├── TicketDetailModal.tsx   # Full ticket view with comments & agent tools
+│   └── JiraComponents.tsx      # Shared UI primitives (badges, avatars, tags)
+├── pages/
+│   ├── EmployeeDashboard.tsx   # My Requests view
+│   ├── AgentDashboard.tsx      # Kanban + List board
+│   └── AnalyticsDashboard.tsx  # Reports & charts
+├── services/
+│   └── aiService.ts            # Mock AI categorization & response drafting
+├── store/
+│   └── ticketStore.ts          # Zustand store with all business logic
+└── types/
+    └── ticket.ts               # TypeScript interfaces
+```
+
+---
+
+## 👤 Demo Roles
+
+The prototype ships with two simulated roles navigable via the sidebar:
+
+| View | Path | User |
+|---|---|---|
+| Employee Portal | `/` | Alice Employee |
+| Agent Board | `/agent` | Support Agent |
+| Reports | `/analytics` | All |
+
+> **Note:** There is no real authentication. Role switching is done by navigating between views. In production this would be backed by JWT-protected routes.
+
+---
+
+## 📌 Known Limitations
+
+- Data is stored in the browser's `localStorage` — clearing browser data resets all tickets
+- AI layer uses keyword-based mock logic; replace `src/services/aiService.ts` with a real LLM API (e.g. Gemini) for production
+- No cross-tab real-time sync
+
+---
+
+*Built as part of The Nudge assignment — June 2026*
